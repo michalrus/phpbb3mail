@@ -9,13 +9,34 @@ use Date::Calc;
 use Net::SMTP::SSL;
 use File::Basename;
 
-# ------------------------- get
+# ------------------------- constants
+
+my $file_threads = dirname(0) . '/threads.dat';
+my $file_cookies = dirname(0) . '/cookies.dat';
+
+# ------------------------- read old threads.dat
+
+my %old_threads;
+
+unless (-e $file_threads) {
+	open (FP, '>' . $file_threads);
+	close(FP);
+}
+
+open (FP, '<' . $file_threads);
+while (my $line = <FP>) {
+#	chomp $line;
+#	my ($k, @v) = split /\t/mis, $line;
+#	%old_threads{$k} = @v;
+	print $line;
+}
+close (FP);
+
+# ------------------------- get new data
 
 my $cookie_jar = HTTP::Cookies->new(
-	file => dirname(0) . "/cookies.dat",
+	file => $file_cookies,
 	autosave => 1,
-#	ignore_discard => 1,
-#	hide_cookie2 => 1,
 );
 
 my $ua = LWP::UserAgent->new;
@@ -65,6 +86,10 @@ if ($r->content =~ m/Zaloguj<\/title>/mis) {
 my @tbl = split /<tr\s+valign="middle">/mis, $r->content;
 shift @tbl;
 
+# ------------------------- parse <tr/> rows and generate new threads
+
+my %new_threads;
+
 foreach my $row (@tbl) {
 	$row =~ s/<\/tr>.*//mis;
 
@@ -96,14 +121,22 @@ foreach my $row (@tbl) {
 		$last_date = $1;
 	}
 
-#	print "\n\n###############################\n";
-	print "thread_id:    " . $thread_id . "\n";
-	print "last_post_id: " . $last_post_id . "\n";
-	print "forum:        " . $forum . "\n";
-	print "title:        " . $title . "\n";
-	print "last_author:  " . $last_author . "\n";
-	print "last_date:    " . $last_date . "\n";
-	print "\n";
-#	print "\n###############################\n\n";
-#	print $row;
+	if (1 > 0) {
+		print "thread_id:    " . $thread_id . "\n";
+		print "last_post_id: " . $last_post_id . "\n";
+		print "forum:        " . $forum . "\n";
+		print "title:        " . $title . "\n";
+		print "last_author:  " . $last_author . "\n";
+		print "last_date:    " . $last_date . "\n";
+		print "\n";
+	}
 }
+
+# ------------------------- save new threads.dat
+
+open (FP, '>' . $file_threads);
+while (my ($k, @v) = each (%new_threads)) {
+	print FP $k . "\t" . join("\t", @v) . "\n";
+}
+close (FP);
+
