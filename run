@@ -35,7 +35,31 @@ $ua->add_handler(response_header => sub {
 
 my $r = $ua->get('http://www.forum.stosowana.pl/search.php?&sr=topics&search_id=unread');
 
+die '-ERR(1)- ', $r->status_line
+	unless $r->is_success;
+
 if ($r->content =~ m/Zaloguj<\/title>/mis) {
-	print "log in\n";
+	my $sid = '';
+	if ($r->content =~ m/name="sid"\s+value="([^"]+)"/mis) {
+		$sid = $1;
+	}
+
+	$r = $ua->post('http://www.forum.stosowana.pl/ucp.php?mode=login', [
+		'username' => 'michalrus',
+		'password' => '4A?%*}",i1=3w]>dFixU',
+		'autologin' => '',
+		'redirect' => 'search.php?&sr=topics&search_id=unread',
+		'sid' => '',
+		'login' => 'Zaloguj'
+		]);
+
+	die '-ERR(2)- ', $r->status_line
+		unless $r->is_success;
+
+	$r = $ua->get('http://www.forum.stosowana.pl/search.php?&sr=topics&search_id=unread');
+
+	die '-ERR(3)- ', $r->status_line
+		unless $r->is_success;
 }
 
+print $r->content;
