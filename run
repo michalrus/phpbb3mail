@@ -62,4 +62,48 @@ if ($r->content =~ m/Zaloguj<\/title>/mis) {
 		unless $r->is_success;
 }
 
-print $r->content;
+my @tbl = split /<tr\s+valign="middle">/mis, $r->content;
+shift @tbl;
+
+foreach my $row (@tbl) {
+	$row =~ s/<\/tr>.*//mis;
+
+	my $thread_id = '';
+	my $last_post_id = '';
+	my $forum = '';
+	my $title = '';
+	my $last_author = '';
+	my $last_date = '';
+
+	if ($row =~ m/\.\/viewtopic\.php\?f=\d+&amp;t=(\d+)&amp;p=(\d+)#p\d+/mis) {
+		$thread_id = $1;
+		$last_post_id = $2;
+	}
+
+	if ($row =~ m/w <a href="\.\/viewforum\.php\?f=\d+">([^<]+)<\/a>/mis) {
+		$forum = $1;
+	}
+
+	if ($row =~ m/class="topictitle">([^<]+)<\/a>/mis) {
+		$title = $1;
+	}
+
+	if ($row =~ m/<p class="topicdetails"><a href="\.\/memberlist\.php\?mode=viewprofile&amp;u=\d+"[^>]*>([^<]+)<\/a>/mis) {
+		$last_author = $1;
+	}
+
+	if ($row =~ m/<p class="topicdetails">[^ ]+ (\d\d [^ ]+, \d\d\d\d \d\d:\d\d)<\/p>/mis) {
+		$last_date = $1;
+	}
+
+#	print "\n\n###############################\n";
+	print "thread_id:    " . $thread_id . "\n";
+	print "last_post_id: " . $last_post_id . "\n";
+	print "forum:        " . $forum . "\n";
+	print "title:        " . $title . "\n";
+	print "last_author:  " . $last_author . "\n";
+	print "last_date:    " . $last_date . "\n";
+	print "\n";
+#	print "\n###############################\n\n";
+#	print $row;
+}
