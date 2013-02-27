@@ -3,4 +3,39 @@
 use strict;
 use warnings;
 
-print "hello\n";
+use LWP::UserAgent;
+use HTTP::Cookies;
+use Date::Calc;
+use Net::SMTP::SSL;
+use File::Basename;
+
+# ------------------------- get
+
+my $cookie_jar = HTTP::Cookies->new(
+	file => dirname(0) . "/cookies.dat",
+	autosave => 1,
+#	ignore_discard => 1,
+#	hide_cookie2 => 1,
+);
+
+my $ua = LWP::UserAgent->new;
+$ua->cookie_jar($cookie_jar);
+$ua->agent('Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/535.2 (KHTML, like Gecko) Chrome/15.0.874.121 Safari/535.2');
+push @{ $ua->requests_redirectable }, 'POST';
+
+$ua->add_handler(request_prepare => sub {
+	my($request, $ua, $h) = @_;
+#	print $request->as_string(), "\n";
+});
+
+$ua->add_handler(response_header => sub {
+	my($response, $ua, $h) = @_;
+#	print $response->as_string(), "\n";
+});
+
+my $r = $ua->get('http://www.forum.stosowana.pl/search.php?&sr=topics&search_id=unread');
+
+if ($r->content =~ m/Zaloguj<\/title>/mis) {
+	print "log in\n";
+}
+
