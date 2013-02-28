@@ -25,10 +25,11 @@ unless (-e $file_threads) {
 
 open (FP, '<' . $file_threads);
 while (my $line = <FP>) {
-#	chomp $line;
-#	my ($k, @v) = split /\t/mis, $line;
-#	%old_threads{$k} = @v;
-	print $line;
+	chomp $line;
+	my ($k, @v) = split /\t/mis, $line;
+	$k = $k + 0;
+	$v[0] = $v[0] + 0;
+	$old_threads{$k} = [ @v ];
 }
 close (FP);
 
@@ -90,19 +91,23 @@ shift @tbl;
 
 my %new_threads;
 
+my @notify_about;
+
 foreach my $row (@tbl) {
 	$row =~ s/<\/tr>.*//mis;
 
 	my $thread_id = '';
 	my $last_post_id = '';
+	my $forum_id = '';
 	my $forum = '';
 	my $title = '';
 	my $last_author = '';
 	my $last_date = '';
 
-	if ($row =~ m/\.\/viewtopic\.php\?f=\d+&amp;t=(\d+)&amp;p=(\d+)#p\d+/mis) {
-		$thread_id = $1;
-		$last_post_id = $2;
+	if ($row =~ m/\.\/viewtopic\.php\?f=(\d+)&amp;t=(\d+)&amp;p=(\d+)#p\d+/mis) {
+		$thread_id = $2;
+		$last_post_id = $3;
+		$forum_id = $1;
 	}
 
 	if ($row =~ m/w <a href="\.\/viewforum\.php\?f=\d+">([^<]+)<\/a>/mis) {
@@ -121,22 +126,82 @@ foreach my $row (@tbl) {
 		$last_date = $1;
 	}
 
-	if (1 > 0) {
+	if (0 == 1) {
 		print "thread_id:    " . $thread_id . "\n";
 		print "last_post_id: " . $last_post_id . "\n";
+		print "forum_id:     " . $forum_id . "\n";
 		print "forum:        " . $forum . "\n";
 		print "title:        " . $title . "\n";
 		print "last_author:  " . $last_author . "\n";
 		print "last_date:    " . $last_date . "\n";
 		print "\n";
 	}
+
+	if (!exists $old_threads{$thread_id} || $old_threads{$thread_id}[0] < $last_post_id) {
+		push @notify_about, ($thread_id);
+	}
+
+	$new_threads{$thread_id} = [ $last_post_id, $forum_id, $forum, $title, $last_author, $last_date ];
+}
+
+# ------------------------- notify about @notify_about
+
+if ($#notify_about >= 0) {
+	my $most_recent = $new_threads{$notify_about[0]}[5];
+
+	my $msg = "<html><head></head><body>\n";
+	my $send = 0;
+
+	foreach my $thread_id (@notify_about) {
+		$send = 1;
+
+		$msg = $msg . '<p>'
+			. '<span style="font-size:100%"><i>'	. $new_threads{$thread_id}[5] . '</i> by <strong>' . $new_threads{$thread_id}[4] . '</strong></span>'
+			. '<br />'
+			. '<a style="font-size:130%;" href="http://www.forum.stosowana.pl/viewtopic.php?f='
+			. $new_threads{$thread_id}[1] . '&amp;t='
+			. $thread_id . '&amp;p='
+			. $new_threads{$thread_id}[0] . '#p'
+			. $new_threads{$thread_id}[0] . '">'
+			. $new_threads{$thread_id}[3] . '</a>'
+			. '<br />'
+			. '<span style="font-size:90%">in: <strong>' . $new_threads{$thread_id}[2] . '</strong></span>'
+			. "</p>\n";
+	}
+
+	$msg .= "</body></html>\n";
+
+	if ($send) {
+		my $smtp = Net::SMTP::SSL->new('smtp.gmail.com', Port => 465, Timeout => 30, Hello => 'michalrus.com', Debug => 0)
+			or die "-ERR(4)- could not connect to server; $!";
+
+		$smtp->auth ('scripts@michalrus.com', 'yCK;*&b1.4rHVfW7zWc#')
+		        or die "-ERR(5)- could not authenticate; $!";
+		$smtp->mail('scripts@michalrus.com');
+		$smtp->to('m@michalrus.com');
+
+		$smtp->data();
+
+		$smtp->datasend('Subject: New posts at Stosowana.pl; most recent at ' . $most_recent . '.' . "\n");
+		$smtp->datasend('To: =?UTF-8?Q?Micha=C5=82_Rus?= <m@michalrus.com>' . "\n");
+		$smtp->datasend('From: phpbb3mail <scripts@michalrus.com>' . "\n");
+		$smtp->datasend('Content-Type: text/html; charset=UTF-8; format=flowed' . "\n");
+		$smtp->datasend('Content-Transfer-Encoding: 8bit' . "\n");
+		$smtp->datasend('MIME-Version: 1.0' . "\n");
+		$smtp->datasend("\n\n");
+
+		$smtp->datasend($msg);
+
+		$smtp->dataend();
+
+		$smtp->quit();
+	}
 }
 
 # ------------------------- save new threads.dat
 
 open (FP, '>' . $file_threads);
-while (my ($k, @v) = each (%new_threads)) {
-	print FP $k . "\t" . join("\t", @v) . "\n";
+for my $k (keys %new_threads) {
+	print FP $k . "\t" . join("\t", @{ $new_threads{$k} }) . "\n";
 }
 close (FP);
-
