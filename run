@@ -84,6 +84,10 @@ if ($r->content =~ m/Zaloguj<\/title>/mis) {
 		unless $r->is_success;
 }
 
+if ($r->content =~ m/Wyszukiwarka\s+nic\s+nie\s+znalazła/mis) {
+	exit;
+}
+
 my @tbl = split /<tr\s+valign="middle">/mis, $r->content;
 shift @tbl;
 
