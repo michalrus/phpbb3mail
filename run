@@ -11,8 +11,8 @@ use File::Basename;
 
 # ------------------------- constants
 
-my $file_threads = dirname(0) . '/threads.dat';
-my $file_cookies = dirname(0) . '/cookies.dat';
+my $file_threads = dirname($0) . '/threads.dat';
+my $file_cookies = dirname($0) . '/cookies.dat';
 
 # ------------------------- read old threads.dat
 
