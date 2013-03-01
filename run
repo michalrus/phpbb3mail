@@ -2,12 +2,14 @@
 
 use strict;
 use warnings;
+use utf8;
 
 use LWP::UserAgent;
 use HTTP::Cookies;
 use Date::Calc;
 use Net::SMTP::SSL;
 use File::Basename;
+use Encode qw/encode decode/;
 
 # ------------------------- constants
 
@@ -60,9 +62,11 @@ my $r = $ua->get('http://www.forum.stosowana.pl/search.php?&sr=topics&search_id=
 die '-ERR(1)- ', $r->status_line
 	unless $r->is_success;
 
-if ($r->content =~ m/Zaloguj<\/title>/mis) {
+$r = $r->decoded_content((charset => 'UTF-8'));
+
+if ($r =~ m/Zaloguj<\/title>/mis) {
 	my $sid = '';
-	if ($r->content =~ m/name="sid"\s+value="([^"]+)"/mis) {
+	if ($r =~ m/name="sid"\s+value="([^"]+)"/mis) {
 		$sid = $1;
 	}
 
@@ -82,13 +86,15 @@ if ($r->content =~ m/Zaloguj<\/title>/mis) {
 
 	die '-ERR(3)- ', $r->status_line
 		unless $r->is_success;
+
+	$r = $r->decoded_content((charset => 'UTF-8'));
 }
 
-if ($r->content =~ m/Wyszukiwarka\s+nic\s+nie\s+znalazła/mis) {
+if ($r =~ m/Wyszukiwarka\s+nic\s+nie\s+znalazła/mis) {
 	exit;
 }
 
-my @tbl = split /<tr\s+valign="middle">/mis, $r->content;
+my @tbl = split /<tr\s+valign="middle">/mis, $r;
 shift @tbl;
 
 # ------------------------- parse <tr/> rows and generate new threads
@@ -150,7 +156,9 @@ foreach my $row (@tbl) {
 
 # ------------------------- notify about @notify_about
 
-if ($#notify_about >= 0) {
+my $num = 1 + $#notify_about;
+
+if ($num >= 0) {
 	my $most_recent = $new_threads{$notify_about[0]}[5];
 
 	my $msg = "<html><head></head><body>\n";
@@ -186,9 +194,18 @@ if ($#notify_about >= 0) {
 
 		$smtp->data();
 
-		$smtp->datasend('Subject: New posts at Stosowana.pl; most recent at ' . $most_recent . '.' . "\n");
+		my $subject = '[Stosowana.pl] ';
+
+		if ($num == 1) {
+			$subject = $subject . '[' . $new_threads{$notify_about[0]}[2] . '] ' . $new_threads{$notify_about[0]}[3];
+		}
+		else {
+			$subject = $subject . $num . ' new posts; most recent at ' . $most_recent . '.';
+		}
+
 		$smtp->datasend('To: =?UTF-8?Q?Micha=C5=82_Rus?= <m@michalrus.com>' . "\n");
 		$smtp->datasend('From: phpbb3mail <scripts@michalrus.com>' . "\n");
+		$smtp->datasend('Subject: ' . encode('MIME-Q', $subject) . "\n");
 		$smtp->datasend('Content-Type: text/html; charset=UTF-8; format=flowed' . "\n");
 		$smtp->datasend('Content-Transfer-Encoding: 8bit' . "\n");
 		$smtp->datasend('MIME-Version: 1.0' . "\n");
@@ -205,6 +222,7 @@ if ($#notify_about >= 0) {
 # ------------------------- save new threads.dat
 
 open (FP, '>' . $file_threads);
+binmode FP, ":utf8";
 for my $k (keys %new_threads) {
 	print FP $k . "\t" . join("\t", @{ $new_threads{$k} }) . "\n";
 }
