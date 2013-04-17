@@ -4,35 +4,43 @@ use strict;
 use warnings;
 use utf8;
 
+use DBI;
 use LWP::UserAgent;
 use HTTP::Cookies;
+use HTML::Entities;
 use Date::Calc;
 use Net::SMTP::SSL;
 use File::Basename;
 use Encode qw/encode decode/;
+use Bytes::Random::Secure;
 
-# ------------------------- constants
+my $rng = Bytes::Random::Secure->new(
+	Bits        => 128,
+	NonBlocking => 1,
+);
 
-my $file_threads = dirname($0) . '/threads.dat';
+# ------------------------- connect to the database, create tables
+
 my $file_cookies = dirname($0) . '/cookies.dat';
+my $file_db = dirname($0) . '/data.db';
 
-# ------------------------- read old threads.dat
+my $dbh = DBI->connect('dbi:SQLite:dbname=' . $file_db, '', '',	{ RaiseError => 1, sqlite_unicode => 1 });
 
-my %old_threads;
+my $stmt;
 
-unless (-e $file_threads) {
-	open (FP, '>' . $file_threads);
-	close(FP);
-}
-
-open (FP, '<' . $file_threads);
-while (my $line = <FP>) {
-	chomp $line;
-	if ($line =~ m/^\s*(\d+)\s*(\d+)\s*$/mis) {
-		$old_threads{$1 + 0} = $2 + 0;
-	}
-}
-close (FP);
+$dbh->do('CREATE TABLE IF NOT EXISTS post (
+	id          INT  NOT NULL PRIMARY KEY,
+	thread_id   INT  NOT NULL,
+	thread_name TEXT NOT NULL,
+	forum_id    INT  NOT NULL,
+	forum_name  TEXT NOT NULL,
+	author_id   INT  NOT NULL,
+	author_name TEXT NOT NULL,
+	date        TEXT NOT NULL,
+	timestamp   INT  NOT NULL,
+	message_id  TEXT
+	)');
+$dbh->do('CREATE INDEX IF NOT EXISTS thread_id ON post (thread_id, timestamp)');
 
 # ------------------------- get new data
 
@@ -98,116 +106,135 @@ shift @tbl;
 
 # ------------------------- parse <tr/> rows and generate new threads
 
-my %new_threads;
+my $timestamp = time();
 
-my @notify_about;
+$stmt = $dbh->prepare('INSERT OR IGNORE INTO post
+	(id, thread_id, thread_name, forum_id, forum_name, author_id, author_name, date, timestamp)
+	VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)');
 
 foreach my $row (@tbl) {
 	$row =~ s/<\/tr>.*//mis;
 
+	my $post_id = 0;
 	my $thread_id = 0;
-	my $last_post_id = 0;
+	my $thread_name = '';
 	my $forum_id = 0;
-	my $forum = '';
-	my $title = '';
-	my $last_author = '';
-	my $last_date = '';
+	my $forum_name = '';
+	my $author_id = 0;
+	my $author_name = '';
+	my $date = '';
 
 	if ($row =~ m/\.\/viewtopic\.php\?f=(\d+)&amp;t=(\d+)&amp;p=(\d+)#p\d+/mis) {
+		$forum_id  = $1 + 0;
 		$thread_id = $2 + 0;
-		$last_post_id = $3 + 0;
-		$forum_id = $1 + 0;
+		$post_id   = $3 + 0;
 	}
 	else {
 		next;
 	}
 
 	if ($row =~ m/w <a href="\.\/viewforum\.php\?f=\d+">([^<]+)<\/a>/mis) {
-		$forum = $1;
+		$forum_name = decode_entities($1);
 	}
 
 	if ($row =~ m/class="topictitle">([^<]+)<\/a>/mis) {
-		$title = $1;
+		$thread_name = decode_entities($1);
 	}
 
-	if ($row =~ m/<p class="topicdetails"><a href="\.\/memberlist\.php\?mode=viewprofile&amp;u=\d+"[^>]*>([^<]+)<\/a>/mis) {
-		$last_author = $1;
+	if ($row =~ m/<p class="topicdetails"><a href="\.\/memberlist\.php\?mode=viewprofile&amp;u=(\d+)"[^>]*>([^<]+)<\/a>/mis) {
+		$author_id   = $1 + 0;
+		$author_name = decode_entities($2);
 	}
 
 	if ($row =~ m/<p class="topicdetails">[^ ]+ (\d\d [^ ]+, \d\d\d\d \d\d:\d\d)<\/p>/mis) {
-		$last_date = $1;
+		$date = decode_entities($1);
 	}
+
+	$stmt->execute($post_id, $thread_id, $thread_name, $forum_id, $forum_name, $author_id, $author_name, $date, $timestamp);
 
 	if (0 == 1) {
+		print "post_id:      " . $post_id . "\n";
 		print "thread_id:    " . $thread_id . "\n";
-		print "last_post_id: " . $last_post_id . "\n";
+		print "thread_name:  " . $thread_name . "\n";
 		print "forum_id:     " . $forum_id . "\n";
-		print "forum:        " . $forum . "\n";
-		print "title:        " . $title . "\n";
-		print "last_author:  " . $last_author . "\n";
-		print "last_date:    " . $last_date . "\n";
+		print "forum_name:   " . $forum_name . "\n";
+		print "author_id:    " . $author_id . "\n";
+		print "author_name:  " . $author_name . "\n";
+		print "date:         " . $date . "\n";
 		print "\n";
 	}
-
-	if (!exists $old_threads{$thread_id} || $old_threads{$thread_id} < $last_post_id) {
-		push @notify_about, ($thread_id);
-	}
-
-	$new_threads{$thread_id} = [ $last_post_id, $forum_id, $forum, $title, $last_author, $last_date ];
 }
 
-# ------------------------- notify about @notify_about
+# ------------------------- notify about new posts
 
-my $num = 1 + $#notify_about;
+$stmt = $dbh->prepare('SELECT id, thread_id, thread_name, forum_name, author_name, date
+	FROM post WHERE message_id IS NULL
+	ORDER BY timestamp ASC, id ASC');
 
-if ($num > 0) {
-	my $most_recent = $new_threads{$notify_about[0]}[5];
+$stmt->execute();
 
-	my $msg = "<html><head></head><body>\n";
-	my $send = 0;
+my $smtp;
 
-	foreach my $thread_id (@notify_about) {
-		$send = 1;
+while (my $post = $stmt->fetchrow_hashref()) {
 
-		$msg = $msg . '<p>'
-			. '<span style="font-size:100%"><i>'	. $new_threads{$thread_id}[5] . '</i> by <strong>' . $new_threads{$thread_id}[4] . '</strong></span>'
-			. '<br />'
-			. '<a style="font-size:130%;" href="http://www.forum.stosowana.pl/viewtopic.php?f='
-			. $new_threads{$thread_id}[1] . '&amp;t='
-			. $thread_id . '&amp;p='
-			. $new_threads{$thread_id}[0] . '#p'
-			. $new_threads{$thread_id}[0] . '">'
-			. $new_threads{$thread_id}[3] . '</a>'
-			. '<br />'
-			. '<span style="font-size:90%">in: <strong>' . $new_threads{$thread_id}[2] . '</strong></span>'
-			. "</p>\n";
-	}
-
-	$msg .= "</body></html>\n";
-
-	if ($send) {
-		my $smtp = Net::SMTP::SSL->new('smtp.gmail.com', Port => 465, Timeout => 30, Hello => 'michalrus.com', Debug => 0)
+	unless ($smtp) {
+		$smtp = Net::SMTP::SSL->new('smtp.gmail.com', Port => 465, Timeout => 30, Hello => 'michalrus.com', Debug => 0)
 			or die "-ERR(4)- could not connect to server; $!";
 
 		$smtp->auth ('scripts@michalrus.com', 'yCK;*&b1.4rHVfW7zWc#')
 		        or die "-ERR(5)- could not authenticate; $!";
+	}
+
+	my $message_id = '<' . $rng->string_from('abcdefghijklmnopqrstuvwxyz0123456789', 32) . '@michalrus.com>';
+
+	my $in_reply_to = '';
+	my $references = '';
+
+	my $stmt2 = $dbh->prepare('SELECT message_id FROM post WHERE message_id IS NOT NULL AND thread_id = ? ORDER BY timestamp ASC, id ASC');
+	$stmt2->execute($post->{'thread_id'});
+	while (my $msg = $stmt2->fetchrow_hashref()) {
+		$in_reply_to = $msg->{'message_id'};
+		$references .= $in_reply_to . ' ';
+	}
+
+	my $subject = '[Stosowana.pl] [' . $post->{'forum_name'} . '] ' . $post->{'thread_name'};
+
+	my $msg = '<html><head></head><body>'
+		. '<p>'
+		. '<span style="font-size:100%"><i>'	. $post->{'date'} . '</i> by <strong>' . $post->{'author_name'} . '</strong></span>'
+		. '<br />'
+		. '<a style="font-size:130%;" href="http://www.forum.stosowana.pl/viewtopic.php?p='
+		. $post->{'id'} . '#p'
+		. $post->{'id'} . '">'
+		. $post->{'thread_name'} . '</a>'
+		. '<br />'
+		. '<span style="font-size:90%">in: <strong>' . $post->{'forum_name'} . '</strong></span>'
+		. '</p>'
+		. '</body></html>'
+		. "\n";
+
+#	print 'Subject: ' . $subject . "\n"
+#		. 'Message-ID: ' . $message_id . "\n"
+#		. 'In-Reply-To: ' . $in_reply_to . "\n"
+#		. 'References: ' . $references . "\n"
+#		. $msg . "\n";
+
+	if (0 == 0) {
 		$smtp->mail('scripts@michalrus.com');
 		$smtp->to('m@michalrus.com');
 
 		$smtp->data();
 
-		my $subject = '[Stosowana.pl] ';
-
-		if ($num == 1) {
-			$subject = $subject . '[' . $new_threads{$notify_about[0]}[2] . '] ' . $new_threads{$notify_about[0]}[3];
-		}
-		else {
-			$subject = $subject . $num . ' new posts; most recent at ' . $most_recent . '.';
-		}
-
 		$smtp->datasend('To: =?UTF-8?Q?Micha=C5=82_Rus?= <m@michalrus.com>' . "\n");
 		$smtp->datasend('From: phpbb3mail <scripts@michalrus.com>' . "\n");
 		$smtp->datasend('Subject: ' . encode('MIME-Q', $subject) . "\n");
+		$smtp->datasend('Message-ID: ' . $message_id . "\n");
+		if (length $in_reply_to) {
+			$smtp->datasend('In-Reply-To: ' . $in_reply_to . "\n");
+		}
+		if (length $references) {
+			$smtp->datasend('References: ' . $references . "\n");
+		}
 		$smtp->datasend('Content-Type: text/html; charset=UTF-8; format=flowed' . "\n");
 		$smtp->datasend('Content-Transfer-Encoding: 8bit' . "\n");
 		$smtp->datasend('MIME-Version: 1.0' . "\n");
@@ -217,15 +244,11 @@ if ($num > 0) {
 
 		$smtp->dataend();
 
-		$smtp->quit();
+		$stmt2 = $dbh->prepare('UPDATE post SET message_id = ? WHERE id = ?');
+		$stmt2->execute($message_id, $post->{'id'});
 	}
 }
 
-# ------------------------- save new threads.dat
-
-open (FP, '>' . $file_threads);
-binmode FP, ":utf8";
-for my $k (keys %new_threads) {
-	print FP $k . "\t" . $new_threads{$k}[0] . "\n";
+if ($smtp) {
+	$smtp->quit();
 }
-close (FP);
