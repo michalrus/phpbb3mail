@@ -203,24 +203,17 @@ while (my $post = $stmt->fetchrow_hashref()) {
 	my $subject = '[Stosowana.pl] [' . $post->{'forum_name'} . '] ' . $post->{'thread_name'};
 
 	my $msg = '<html><head></head><body>'
-		. '<p>'
-		. '<span style="font-size:100%"><i>'	. $post->{'date'} . '</i> by <strong>' . $post->{'author_name'} . '</strong></span>'
-		. '<br />'
-		. '<a style="font-size:130%;" href="http://www.forum.stosowana.pl/viewtopic.php?p='
+		. '<p>On '
+		. '<a href="http://www.forum.stosowana.pl/viewtopic.php?p='
 		. $post->{'id'} . '#p'
 		. $post->{'id'} . '">'
-		. $post->{'thread_name'} . '</a>'
-		. '<br />'
-		. '<span style="font-size:90%">in: <strong>' . $post->{'forum_name'} . '</strong></span>'
-		. '</p>'
+		. '<i>'	. $post->{'date'} . '</i>'
+		. '</a>'
+		. ' by '
+		. '<strong>' . $post->{'author_name'} . '</strong>'
+		. '.</p>'
 		. '</body></html>'
 		. "\n";
-
-#	print 'Subject: ' . $subject . "\n"
-#		. 'Message-ID: ' . $message_id . "\n"
-#		. 'In-Reply-To: ' . $in_reply_to . "\n"
-#		. 'References: ' . $references . "\n"
-#		. $msg . "\n";
 
 	if (0 == 0) {
 		$smtp->mail('scripts@michalrus.com');
