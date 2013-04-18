@@ -194,7 +194,10 @@ while (my $post = $stmt->fetchrow_hashref()) {
 	$stmt2->execute($post->{'thread_id'});
 	while (my $msg = $stmt2->fetchrow_hashref()) {
 		$in_reply_to = $msg->{'message_id'};
-		$references .= $in_reply_to . ' ';
+		if (length $references) {
+			$references .= "\n\t";
+		}
+		$references .= $in_reply_to;
 	}
 
 	my $subject = '[Stosowana.pl] [' . $post->{'forum_name'} . '] ' . $post->{'thread_name'};
