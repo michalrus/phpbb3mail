@@ -200,10 +200,10 @@ while (my $post = $stmt->fetchrow_hashref()) {
 		$references .= $in_reply_to;
 	}
 
-	my $subject = '[Stosowana.pl] [' . $post->{'forum_name'} . '] ' . $post->{'thread_name'};
+	my $subject = '[' . $post->{'forum_name'} . '] ' . $post->{'thread_name'};
 
 	my $msg = '<html><head></head><body>'
-		. '<p>On '
+		. '<p>'
 		. '<a href="http://www.forum.stosowana.pl/viewtopic.php?p='
 		. $post->{'id'} . '#p'
 		. $post->{'id'} . '">'
@@ -211,7 +211,7 @@ while (my $post = $stmt->fetchrow_hashref()) {
 		. '</a>'
 		. ' by '
 		. '<strong>' . $post->{'author_name'} . '</strong>'
-		. '.</p>'
+		. '</p>'
 		. '</body></html>'
 		. "\n";
 
@@ -222,7 +222,7 @@ while (my $post = $stmt->fetchrow_hashref()) {
 		$smtp->data();
 
 		$smtp->datasend('To: =?UTF-8?Q?Micha=C5=82_Rus?= <m@michalrus.com>' . "\n");
-		$smtp->datasend('From: phpbb3mail <scripts@michalrus.com>' . "\n");
+		$smtp->datasend('From: Stosowana.pl <scripts@michalrus.com>' . "\n");
 		$smtp->datasend('Subject: ' . encode('MIME-Q', $subject) . "\n");
 		$smtp->datasend('Message-ID: ' . $message_id . "\n");
 		if (length $in_reply_to) {
