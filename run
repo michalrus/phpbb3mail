@@ -77,21 +77,6 @@ sub notify {
 	$smtp->dataend();
 }
 
-# ------------------------- error handling (notify by mail)
-
-sub mydie {
-	my $msg = join(' ', @_);
-	my ($package, $filename, $line) = caller;
-
-	chomp $msg;
-	$msg = "<p>" . $msg . "<br/>\n" . '<i style="color: gray;">(line ' . $line . ' of `' . $package . '\' in `' . $filename . "\')</i></p>\n";
-	$msg .= "<p>You will be notified when it goes up again.</p>\n";
-
-	notify("Target is down.", $msg);
-
-	exit;
-}
-
 # ------------------------- connect to the database, create tables
 
 my $file_cookies = dirname($0) . '/cookies.dat';
@@ -120,9 +105,45 @@ $dbh->do('CREATE TABLE IF NOT EXISTS runtime (
 	val         TEXT NOT NULL
 	)');
 
-$stmt = $dbh->prepare('INSERT OR IGNORE INTO runtime (key, val) VALUES(?, ?)');
+sub kv_set_if_not_exists {
+	my ($key, $val) = @_;
+	my $stmt = $dbh->prepare('INSERT OR IGNORE INTO runtime (key, val) VALUES(?, ?)');
+	$stmt->execute($key, $val);
+}
 
-$stmt->execute('previously_succedeed', 'yes');
+# defaults
+kv_set_if_not_exists('previously_succeeded', 'yes');
+
+sub kv_set {
+	my ($key, $val) = @_;
+	my $stmt = $dbh->prepare('INSERT OR REPLACE INTO runtime (key, val) VALUES(?, ?)');
+	$stmt->execute($key, $val);
+}
+
+sub kv_get {
+	my ($key) = @_;
+	my $stmt = $dbh->prepare('SELECT val FROM runtime WHERE key = ?');
+	$stmt->execute($key);
+	my ($value) = $stmt->fetchrow_array;
+	return $value;
+}
+
+# ------------------------- error handling (notify by mail)
+
+sub mydie {
+	my $msg = join(' ', @_);
+	my ($package, $filename, $line) = caller;
+
+	chomp $msg;
+	$msg = "<p>" . $msg . "<br/>\n" . '<i style="color: gray;">(line ' . $line . ' of `' . $package . '\' in `' . $filename . "\')</i></p>\n";
+	$msg .= "<p>You will be notified when it goes up again.</p>\n";
+
+	notify("Target is down.", $msg);
+
+	kv_set('previously_succeeded', 'no');
+
+	exit;
+}
 
 # ------------------------- get new data
 
