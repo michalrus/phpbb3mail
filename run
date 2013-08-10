@@ -138,9 +138,10 @@ sub mydie {
 	$msg = "<p>" . $msg . "<br/>\n" . '<i style="color: gray;">(line ' . $line . ' of `' . $package . '\' in `' . $filename . "\')</i></p>\n";
 	$msg .= "<p>You will be notified when it goes up again.</p>\n";
 
-	notify("Target is down.", $msg);
-
-	kv_set('previously_succeeded', 'no');
+	if (kv_get('previously_succeeded') eq 'yes') {
+		notify("Target is down.", $msg);
+		kv_set('previously_succeeded', 'no');
+	}
 
 	exit;
 }
