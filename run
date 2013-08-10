@@ -42,6 +42,15 @@ $dbh->do('CREATE TABLE IF NOT EXISTS post (
 	)');
 $dbh->do('CREATE INDEX IF NOT EXISTS thread_id ON post (thread_id, timestamp)');
 
+$dbh->do('CREATE TABLE IF NOT EXISTS runtime (
+	key         TEXT NOT NULL PRIMARY KEY,
+	val         TEXT NOT NULL
+	)');
+
+$stmt = $dbh->prepare('INSERT OR IGNORE INTO runtime (key, val) VALUES(?, ?)');
+
+$stmt->execute('previously_succedeed', 'yes');
+
 # ------------------------- get new data
 
 my $cookie_jar = HTTP::Cookies->new(
