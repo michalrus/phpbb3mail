@@ -146,6 +146,21 @@ sub mydie {
 	exit;
 }
 
+sub succeeded {
+	if (kv_get('previously_succeeded') eq 'yes') {
+		return;
+	}
+
+	my $msg = 'The HTTP server is back up.';
+	my ($package, $filename, $line) = caller;
+
+	chomp $msg;
+	$msg = "<p>" . $msg . "<br/>\n" . '<i style="color: gray;">(line ' . $line . ' of `' . $package . '\' in `' . $filename . "\')</i></p>\n";
+
+	notify("Target is back up.", $msg);
+	kv_set('previously_succeeded', 'yes');
+}
+
 # ------------------------- get new data
 
 my $cookie_jar = HTTP::Cookies->new(
@@ -170,8 +185,12 @@ $ua->add_handler(response_header => sub {
 
 my $r = $ua->get('http://www.forum.stosowana.pl/search.php?&sr=topics&search_id=unread');
 
-mydie 'Cannot reach HTTP server; ', $r->status_line
-	unless $r->is_success;
+if ($r->is_success) {
+	succeeded;
+}
+else {
+	mydie 'Cannot reach HTTP server; ', $r->status_line;
+}
 
 $r = $r->decoded_content((charset => 'UTF-8'));
 
