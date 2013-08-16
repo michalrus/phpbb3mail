@@ -28,3 +28,12 @@ Licensing
 ----
 
 Licensed under the [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0).
+
+
+Screenshots
+----
+
+![phpbb3mail Gmail screenshot][1]
+
+
+  [1]: http://i.stack.imgur.com/48m2K.png
