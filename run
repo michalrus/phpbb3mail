@@ -19,6 +19,52 @@ my $rng = Bytes::Random::Secure->new(
 	NonBlocking => 1,
 );
 
+# ------------------------- config
+
+my %cfg = ();
+
+my %cfg_fields = map { $_ => 1 } ('BoardURL', 'BoardUsername', 'BoardPassword', 'MailTo', 'GmailFromName', 'GmailFromEmail', 'GmailPassword');
+
+my $cfg_file = dirname($0) . '/config.cfg';
+
+unless (open FP, '<', $cfg_file) {
+	print $cfg_file . ": " . $! . "\n\nPlease, copy config.cfg.sample to config.cfg\nand modify it to suit your needs.\n";
+	exit;
+};
+
+my $line_num = 0;
+while (my $line = <FP>) {
+	$line_num++;
+	chomp $line;
+	if ($line =~ m/^\s*(#.*)?$/) {
+		next;
+	}
+	elsif ($line =~ m/^\s*([a-z]+)\s+"(.*?)"\s*?$/i) {
+		my $key = $1;
+		my $val = $2;
+
+		unless (exists($cfg_fields{$key})) {
+			print $cfg_file . ': unknown key `' . $key . '\' on line ' . $line_num . ":\n\n    " . $line . "\n\n";
+			exit;
+		}
+
+		$cfg{$key} = $val;
+	}
+	else {
+		print $cfg_file . ': WTF on line ' . $line_num . ":\n\n    " . $line . "\n\n";
+		exit;
+	}
+}
+
+close FP;
+
+for my $key (keys %cfg_fields) {
+	unless (exists($cfg{$key})) {
+		print $cfg_file . ': required key `' . $key . "\' not found\n";
+		exit;
+	}
+}
+
 # ------------------------- mail
 
 my $smtp;
@@ -40,21 +86,21 @@ sub notify {
 					warn $warn;
 				}
 			};
-			$smtp = Net::SMTP::SSL->new('smtp.gmail.com', Port => 465, Timeout => 30, Hello => 'michalrus.com', Debug => 0)
+			$smtp = Net::SMTP::SSL->new('smtp.gmail.com', Port => 465, Timeout => 30, Hello => 'phpbb3mail', Debug => 0)
 				or die "Could not connect to SMTP server; $!";
 		}
 
-		$smtp->auth ('scripts@michalrus.com', 'yCK;*&b1.4rHVfW7zWc#')
+		$smtp->auth ($cfg{'GmailFromEmail'}, $cfg{'GmailPassword'})
 		        or die "Could not authenticate with SMTP; $!";
 	}
 
-	$smtp->mail('scripts@michalrus.com');
-	$smtp->to('m@michalrus.com');
+	$smtp->mail($cfg{'GmailFromEmail'});
+	$smtp->to($cfg{'MailTo'});
 
 	$smtp->data();
 
-	$smtp->datasend('To: =?UTF-8?Q?Micha=C5=82_Rus?= <m@michalrus.com>' . "\n");
-	$smtp->datasend('From: Stosowana.pl <scripts@michalrus.com>' . "\n");
+	$smtp->datasend('To: ' . $cfg{'MailTo'} . "\n");
+	$smtp->datasend('From: ' . $cfg{'GmailFromName'} . ' <' . $cfg{'GmailFromEmail'} . '>' . "\n");
 	$smtp->datasend('Subject: ' . encode('MIME-Q', $subject) . "\n");
 	if (length $message_id) {
 		$smtp->datasend('Message-ID: ' . $message_id . "\n");
@@ -183,7 +229,7 @@ $ua->add_handler(response_header => sub {
 #	print $response->as_string(), "\n";
 });
 
-my $r = $ua->get('http://www.forum.stosowana.pl/search.php?&sr=topics&search_id=unread');
+my $r = $ua->get($cfg{'BoardURL'} . '/search.php?&sr=topics&search_id=unread');
 
 if ($r->is_success) {
 	succeeded;
@@ -200,9 +246,9 @@ if ($r =~ m/Zaloguj<\/title>/mis) {
 		$sid = $1;
 	}
 
-	$r = $ua->post('http://www.forum.stosowana.pl/ucp.php?mode=login', [
-		'username' => 'michalrus',
-		'password' => '4A?%*}",i1=3w]>dFixU',
+	$r = $ua->post($cfg{'BoardURL'} . '/ucp.php?mode=login', [
+		'username' => $cfg{'BoardUsername'},
+		'password' => $cfg{'BoardPassword'},
 		'autologin' => '',
 		'redirect' => 'search.php?&sr=topics&search_id=unread',
 		'sid' => '',
@@ -212,7 +258,7 @@ if ($r =~ m/Zaloguj<\/title>/mis) {
 	mydie 'Cannot reach HTTP server; ', $r->status_line
 		unless $r->is_success;
 
-	$r = $ua->get('http://www.forum.stosowana.pl/search.php?&sr=topics&search_id=unread');
+	$r = $ua->get($cfg{'BoardURL'} . '/search.php?&sr=topics&search_id=unread');
 
 	mydie 'Cannot reach HTTP server; ', $r->status_line
 		unless $r->is_success;
@@ -315,7 +361,7 @@ while (my $post = $stmt->fetchrow_hashref()) {
 	my $subject = '[' . $post->{'forum_name'} . '] ' . $post->{'thread_name'};
 
 	my $msg = '<p>'
-		. '<a href="http://www.forum.stosowana.pl/viewtopic.php?p='
+		. '<a href="' . $cfg{'BoardURL'} . '/viewtopic.php?p='
 		. $post->{'id'} . '#p'
 		. $post->{'id'} . '">'
 		. '<i>'	. $post->{'date'} . '</i>'

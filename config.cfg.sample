@@ -1,0 +1,39 @@
+##
+# Copy this sample file to `./config.cfg', modify it to suit
+# your needs and add `./run` to your crontab to run the script
+# periodically, e.g.
+#
+# $ crontab -e
+#
+# ... and append something along the lines of:
+#
+# * * * * * /home/m/scripts/phpbb3mail/run
+#
+
+##
+# URL (with protocol://), username and password of your phpBB3
+# board installation.
+#
+
+BoardURL         "http://www.forum.stosowana.pl"
+BoardUsername    "michalrus"
+BoardPassword    "4A?%*}",i1=3w]>dFixU"
+
+##
+# To whom send the notifications?
+#
+
+MailTo           "m@michalrus.com"
+
+##
+# From which Gmail account?
+#
+
+GmailFromName    "Stosowana.pl"
+GmailFromEmail   "scripts@michalrus.com"
+GmailPassword    "yCK;*&b1.4rHVfW7zWc#"
+
+##
+# (Please, note that credentials in this sample file are no longer valid,
+# in case you wanted to try something... nasty.)
+#
