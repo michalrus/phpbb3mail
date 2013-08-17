@@ -4,7 +4,7 @@ phpbb3mail
 Perl mail notifications for your new unread posts of a phpBB3 site.
 ----
 
-What this script simply does is send ONE e-mail message for each found unread post. For phpBB3 to track your unread posts, you need to have an account on chosen site.
+What this script simply does is send *one* e-mail message for each found unread post. For phpBB3 to track your unread posts, you need to have an account on a chosen site.
 
 Furthermore, messages for posts of one thread are *grouped together* by means of `References:` and `In-Reply-To:` mail headers. This approach renders *conversations* in Gmail.
 
