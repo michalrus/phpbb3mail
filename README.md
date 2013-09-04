@@ -16,7 +16,7 @@ How to install
 ----
 1. Clone this repo: `$ git clone https://github.com/michalrus/phpbb3mail.git`.
 1. Copy `config.cfg.sample` to `config.cfg` and modify it to suit your needs.
-1. Test `./run`, install missing Perl modules if any (on Debian-like system the ones you might not already have are `libdbi-perl`, `libwww-perl`, `libnet-smtp-ssl-perl`, `libbytes-random-secure-perl`).
+1. Test `./run`, install missing Perl modules if any (on Debian-like system the ones you might not already have are `libdbi-perl`, `libdbd-sqlite3-perl`, `libwww-perl`, `libnet-smtp-ssl-perl`, `libbytes-random-secure-perl`).
 1. Add `./run` to your crontab: `$ crontab -e` and append something like `* * * * * /your/path/to/phpbb3mail/run` to it.
 
 Bugs
