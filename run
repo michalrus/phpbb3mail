@@ -223,6 +223,18 @@ sub succeeded {
 	kv_set('previously_succeeded', 'yes');
 }
 
+# ------------------------- content interpreters
+
+sub logged_in {
+	my ($r) = @_;
+	if ($r =~ m/Zaloguj<\/title>/mis) {
+		return 0;
+	}
+	else {
+		return 1;
+	}
+}
+
 # ------------------------- get new data
 
 my $cookie_jar = HTTP::Cookies->new(
@@ -256,7 +268,7 @@ else {
 
 $r = $r->decoded_content((charset => 'UTF-8'));
 
-if ($r =~ m/Zaloguj<\/title>/mis) {
+unless (logged_in($r)) {
 	my $sid = '';
 	if ($r =~ m/name="sid"\s+value="([^"]+)"/mis) {
 		$sid = $1;
@@ -273,6 +285,17 @@ if ($r =~ m/Zaloguj<\/title>/mis) {
 
 	mydie 'Cannot reach HTTP server; ', $r->status_line
 		unless $r->is_success;
+
+	$r = $r->decoded_content((charset => 'UTF-8'));
+
+	unless (logged_in($r)) {
+		my $reason = 'unknown reason';
+		if ($r =~ m/<span\s+class="error">(.*?)<\/span>/mis) {
+			$reason = $1;
+		}
+
+		mydie 'Failed to authenticate with phpbb3 installation: ' . $reason;
+	}
 
 	$r = $ua->get($cfg{'BoardURL'} . '/search.php?&sr=topics&search_id=unread');
 
